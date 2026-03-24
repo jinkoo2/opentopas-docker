@@ -7,10 +7,13 @@ services:
     ports:
       - "5900:5900"   # VNC (connect with any VNC client)
       - "6080:6080"   # noVNC (open http://localhost:6080/vnc.html in browser)
+      - "8080:8080"   # code-server (open http://localhost:8080 in browser)
     environment:
       - VNC_PASS=${VNC_PASS}
+      - CODE_SERVER_PASS=${CODE_SERVER_PASS}
       - VNC_RESOLUTION=1280x800x24
     shm_size: "2g"
     restart: unless-stopped
     volumes:
       - ./workspace:/root/workspace
+      

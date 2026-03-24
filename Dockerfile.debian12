@@ -38,12 +38,17 @@ RUN apt-get update && apt-get install -y \
     cmake \
     git \
     wget \
+    curl \
     qt6-base-dev \
     qt6-base-dev-tools \
     qt6-tools-dev \
     qt6-tools-dev-tools \
     libqt6opengl6-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# ── code-server (browser-based VS Code) ──────────────────────────────────────
+RUN curl -fsSL https://code-server.dev/install.sh | sh \
+    && rm -rf /tmp/code-server*
 
 # ── Supervisord config ────────────────────────────────────────────────────────
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf

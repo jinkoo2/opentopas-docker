@@ -7,4 +7,13 @@ x11vnc -storepasswd "${VNC_PASS:-pass}" /root/.vnc/passwd
 mkdir -p /root/workspace
 chmod 777 /root/workspace
 
+# Write code-server config with password from CODE_SERVER_PASS env var
+mkdir -p /root/.config/code-server
+cat > /root/.config/code-server/config.yaml <<EOF
+bind-addr: 0.0.0.0:8080
+auth: password
+password: ${CODE_SERVER_PASS:-changeme}
+cert: false
+EOF
+
 exec /usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf

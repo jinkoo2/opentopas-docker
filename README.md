@@ -23,12 +23,13 @@ git clone https://github.com/jinkoo2/opentopas-docker.git
 cd opentopas-docker
 ```
 
-### 2. Set your VNC password
+### 2. Set your passwords
 
 Create a `.env` file in the repo directory:
 
-```bash
-echo "VNC_PASS=your_secure_password" > .env
+```
+VNC_PASS=your_secure_vnc_password
+CODE_SERVER_PASS=your_secure_codeserver_password
 ```
 
 ### 3. Build the image
@@ -49,15 +50,13 @@ docker compose up -d
 
 ## Connecting to the desktop
 
-Open your browser and go to:
+| Service | URL | Password key |
+|---|---|---|
+| LXDE desktop (noVNC) | `http://localhost:6080/vnc.html` | `VNC_PASS` |
+| Code editor (code-server) | `http://localhost:8080` | `CODE_SERVER_PASS` |
+| VNC client | `localhost:5900` | `VNC_PASS` |
 
-```
-http://localhost:6080/vnc.html
-```
-
-Enter the password you set in `.env`. You will see a full LXDE desktop running inside the container.
-
-You can also connect with any VNC client at `localhost:5900` using the same password.
+Passwords are set in `.env`.
 
 ---
 
@@ -118,12 +117,16 @@ docker compose up --build -d
 
 ---
 
-## Changing the VNC password
+## Changing passwords
 
 Edit `.env` and restart:
 
+```
+VNC_PASS=new_vnc_password
+CODE_SERVER_PASS=new_codeserver_password
+```
+
 ```bash
-echo "VNC_PASS=new_password" > .env
 docker compose down && docker compose up -d
 ```
 
