@@ -1,0 +1,16 @@
+services:
+  opentopas-desktop:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: opentopas-desktop
+    ports:
+      - "6080:80"
+    environment:
+      - USER=root
+      - PASSWORD=pass
+    shm_size: "2g"
+    restart: unless-stopped
+    volumes:
+      # Mount a local directory for easy file exchange with the container
+      - ./workspace:/root/workspace
