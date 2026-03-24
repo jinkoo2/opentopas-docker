@@ -19,6 +19,8 @@ RUN apt-get update && apt-get install -y \
     # Browser-based VNC client (noVNC + websockify)
     novnc \
     websockify \
+    # Clipboard sync between host and container
+    autocutsel \
     # Process supervisor to manage all services
     supervisor \
     && rm -rf /var/lib/apt/lists/*
