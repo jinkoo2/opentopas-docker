@@ -1,0 +1,2 @@
+# Secret — never commit the VNC password
+.env

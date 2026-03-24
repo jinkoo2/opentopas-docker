@@ -8,7 +8,7 @@ services:
       - "5900:5900"   # VNC (connect with any VNC client)
       - "6080:6080"   # noVNC (open http://localhost:6080/vnc.html in browser)
     environment:
-      - VNC_PASS=pass
+      - VNC_PASS=${VNC_PASS}
       - VNC_RESOLUTION=1280x800x24
     shm_size: "2g"
     restart: unless-stopped
