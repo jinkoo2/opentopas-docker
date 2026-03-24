@@ -2,15 +2,15 @@ services:
   opentopas-desktop:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.debian12
     container_name: opentopas-desktop
     ports:
-      - "6080:80"
+      - "5900:5900"   # VNC (connect with any VNC client)
+      - "6080:6080"   # noVNC (open http://localhost:6080/vnc.html in browser)
     environment:
-      - USER=root
-      - PASSWORD=pass
+      - VNC_PASS=pass
+      - VNC_RESOLUTION=1280x800x24
     shm_size: "2g"
     restart: unless-stopped
     volumes:
-      # Mount a local directory for easy file exchange with the container
       - ./workspace:/root/workspace
