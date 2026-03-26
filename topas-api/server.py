@@ -1,13 +1,16 @@
 """
 OpenTOPAS REST + WebSocket API server.
 
+All HTTP endpoints require:  Authorization: Bearer <API_TOKEN>
+WebSocket endpoint requires: ?token=<API_TOKEN> query parameter
+
 Endpoints:
-  POST   /jobs                  – submit a simulation (upload .txt param file)
+  POST   /jobs                  – submit a simulation (param file + optional input files)
   GET    /jobs                  – list all jobs
   GET    /jobs/{id}             – get job status & metadata
   DELETE /jobs/{id}             – cancel a running job
   GET    /jobs/{id}/results     – download output files as a zip archive
-  WS     /ws/{id}               – stream stdout/stderr in real time
+  WS     /ws/{id}?token=...     – stream stdout/stderr in real time
 """
 
 import asyncio
@@ -24,14 +27,17 @@ from typing import Dict, List, Optional
 
 import aiofiles
 from fastapi import (
+    Depends,
     FastAPI,
     File,
     HTTPException,
+    Query,
     UploadFile,
     WebSocket,
     WebSocketDisconnect,
 )
 from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
@@ -43,6 +49,22 @@ JOBS_ROOT = Path("/tmp/topas-jobs")
 JOBS_ROOT.mkdir(parents=True, exist_ok=True)
 
 CHUNK_SIZE = 1024 * 1024  # 1 MB — used for chunked upload reads and zip streaming
+
+# ---------------------------------------------------------------------------
+# Auth — mock static bearer token (replace with a proper JWT secret in prod)
+# ---------------------------------------------------------------------------
+
+# To rotate: change this value and restart the container.
+API_TOKEN = "topas-dev-a3f8c2d1-4b7e-4f9a-8c3d-2e1f5a6b7c8d"
+
+_bearer = HTTPBearer()
+
+
+def _verify_token(
+    creds: HTTPAuthorizationCredentials = Depends(_bearer),
+) -> None:
+    if creds.credentials != API_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid or missing API token")
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -156,34 +178,44 @@ async def _run_simulation(job: JobRecord) -> None:
 
 
 @app.post("/jobs", status_code=201)
-async def submit_job(param_file: UploadFile = File(...)):
-    """Upload a TOPAS .txt parameter file and start a simulation."""
+async def submit_job(
+    param_file: UploadFile = File(...),
+    input_files: List[UploadFile] = File(default=[]),
+    _: None = Depends(_verify_token),
+):
+    """Upload a TOPAS .txt parameter file plus any auxiliary input files (e.g.
+    CT binary) and start a simulation.  All files land in the same job working
+    directory so relative paths in the param file resolve correctly."""
     job_id = str(uuid.uuid4())
     job = JobRecord(job_id=job_id, param_filename=param_file.filename or "sim.txt")
 
-    # Create working directory and save the uploaded file in chunks
     job.work_dir.mkdir(parents=True, exist_ok=True)
-    dest = job.work_dir / job.param_filename
-    async with aiofiles.open(dest, "wb") as f:
+
+    # Save param file in chunks
+    async with aiofiles.open(job.work_dir / job.param_filename, "wb") as f:
         while chunk := await param_file.read(CHUNK_SIZE):
             await f.write(chunk)
 
+    # Save any auxiliary input files (e.g. CT binary) in chunks
+    for aux in input_files:
+        aux_name = aux.filename or "aux_file"
+        async with aiofiles.open(job.work_dir / aux_name, "wb") as f:
+            while chunk := await aux.read(CHUNK_SIZE):
+                await f.write(chunk)
+
     _jobs[job_id] = job
-
-    # Launch simulation as a background task (fire-and-forget)
     asyncio.create_task(_run_simulation(job))
-
     return job.to_dict()
 
 
 @app.get("/jobs")
-async def list_jobs():
+async def list_jobs(_: None = Depends(_verify_token)):
     """Return a list of all jobs."""
     return [j.to_dict() for j in _jobs.values()]
 
 
 @app.get("/jobs/{job_id}")
-async def get_job(job_id: str):
+async def get_job(job_id: str, _: None = Depends(_verify_token)):
     """Return status and metadata for a single job."""
     job = _jobs.get(job_id)
     if not job:
@@ -192,7 +224,7 @@ async def get_job(job_id: str):
 
 
 @app.delete("/jobs/{job_id}")
-async def cancel_job(job_id: str):
+async def cancel_job(job_id: str, _: None = Depends(_verify_token)):
     """Terminate a running job."""
     job = _jobs.get(job_id)
     if not job:
@@ -210,7 +242,7 @@ async def cancel_job(job_id: str):
 
 
 @app.get("/jobs/{job_id}/results")
-async def get_results(job_id: str):
+async def get_results(job_id: str, _: None = Depends(_verify_token)):
     """Download all output files for a completed job as a zip archive."""
     job = _jobs.get(job_id)
     if not job:
@@ -249,8 +281,17 @@ async def get_results(job_id: str):
 
 
 @app.websocket("/ws/{job_id}")
-async def stream_logs(websocket: WebSocket, job_id: str):
-    """Stream stdout/stderr of a running (or already-finished) job."""
+async def stream_logs(
+    websocket: WebSocket,
+    job_id: str,
+    token: Optional[str] = Query(None),
+):
+    """Stream stdout/stderr of a running (or already-finished) job.
+    Pass the API token as ?token=<API_TOKEN> in the URL."""
+    if token != API_TOKEN:
+        await websocket.close(code=4001, reason="Unauthorized")
+        return
+
     job = _jobs.get(job_id)
     if not job:
         await websocket.close(code=4004, reason="Job not found")

@@ -22,10 +22,14 @@ import httpx
 import websockets
 
 
-BASE_URL = "http://localhost:8000"
-WS_URL   = "ws://localhost:8000"
+BASE_URL = "http://roweb3:7778"
+WS_URL   = "ws://roweb3:7778"
 
 DEFAULT_PARAM = Path(__file__).parent / "test_sim.txt"
+
+# Must match API_TOKEN in server.py
+API_TOKEN = "topas-dev-a3f8c2d1-4b7e-4f9a-8c3d-2e1f5a6b7c8d"
+AUTH_HEADERS = {"Authorization": f"Bearer {API_TOKEN}"}
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -49,6 +53,7 @@ async def test_submit(client: httpx.AsyncClient, param_path: Path) -> str:
         resp = await client.post(
             f"{BASE_URL}/jobs",
             files={"param_file": (param_path.name, f, "text/plain")},
+            headers=AUTH_HEADERS,
         )
     if resp.status_code != 201:
         fail(f"Expected 201, got {resp.status_code}: {resp.text}")
@@ -60,7 +65,7 @@ async def test_submit(client: httpx.AsyncClient, param_path: Path) -> str:
 
 async def test_stream_logs(job_id: str) -> None:
     print("\n[2] Stream logs via WebSocket")
-    uri = f"{WS_URL}/ws/{job_id}"
+    uri = f"{WS_URL}/ws/{job_id}?token={API_TOKEN}"
     line_count = 0
     try:
         async with websockets.connect(uri) as ws:
@@ -76,7 +81,7 @@ async def test_stream_logs(job_id: str) -> None:
 
 async def test_get_status(client: httpx.AsyncClient, job_id: str) -> str:
     print("\n[3] Get job status")
-    resp = await client.get(f"{BASE_URL}/jobs/{job_id}")
+    resp = await client.get(f"{BASE_URL}/jobs/{job_id}", headers=AUTH_HEADERS)
     if resp.status_code != 200:
         fail(f"Expected 200, got {resp.status_code}: {resp.text}")
     data = resp.json()
@@ -90,7 +95,7 @@ async def test_get_status(client: httpx.AsyncClient, job_id: str) -> str:
 
 async def test_list_jobs(client: httpx.AsyncClient, job_id: str) -> None:
     print("\n[4] List all jobs")
-    resp = await client.get(f"{BASE_URL}/jobs")
+    resp = await client.get(f"{BASE_URL}/jobs", headers=AUTH_HEADERS)
     if resp.status_code != 200:
         fail(f"Expected 200, got {resp.status_code}")
     jobs = resp.json()
@@ -102,7 +107,7 @@ async def test_list_jobs(client: httpx.AsyncClient, job_id: str) -> None:
 
 async def test_download_results(client: httpx.AsyncClient, job_id: str) -> None:
     print("\n[5] Download results zip")
-    resp = await client.get(f"{BASE_URL}/jobs/{job_id}/results")
+    resp = await client.get(f"{BASE_URL}/jobs/{job_id}/results", headers=AUTH_HEADERS)
     if resp.status_code != 200:
         fail(f"Expected 200, got {resp.status_code}: {resp.text}")
     content_type = resp.headers.get("content-type", "")
