@@ -14,6 +14,7 @@ import asyncio
 import io
 import os
 import shutil
+import tempfile
 import uuid
 import zipfile
 from datetime import datetime, timezone
@@ -40,6 +41,8 @@ from pydantic import BaseModel
 TOPAS_SCRIPT = Path("/root/shellScripts/topas")
 JOBS_ROOT = Path("/tmp/topas-jobs")
 JOBS_ROOT.mkdir(parents=True, exist_ok=True)
+
+CHUNK_SIZE = 1024 * 1024  # 1 MB — used for chunked upload reads and zip streaming
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -158,12 +161,12 @@ async def submit_job(param_file: UploadFile = File(...)):
     job_id = str(uuid.uuid4())
     job = JobRecord(job_id=job_id, param_filename=param_file.filename or "sim.txt")
 
-    # Create working directory and save the uploaded file
+    # Create working directory and save the uploaded file in chunks
     job.work_dir.mkdir(parents=True, exist_ok=True)
     dest = job.work_dir / job.param_filename
     async with aiofiles.open(dest, "wb") as f:
-        content = await param_file.read()
-        await f.write(content)
+        while chunk := await param_file.read(CHUNK_SIZE):
+            await f.write(chunk)
 
     _jobs[job_id] = job
 
@@ -218,15 +221,28 @@ async def get_results(job_id: str):
             detail=f"Results not available yet (status: {job.status})",
         )
 
-    # Build zip in memory
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in job.work_dir.iterdir():
-            zf.write(f, arcname=f.name)
-    buf.seek(0)
+    # Build zip on disk (blocking I/O → thread executor) to avoid RAM spike
+    tmp_fd, tmp_path_str = tempfile.mkstemp(suffix=".zip")
+    os.close(tmp_fd)
+    tmp_path = Path(tmp_path_str)
+
+    def _build_zip() -> None:
+        with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for f in job.work_dir.iterdir():
+                zf.write(f, arcname=f.name)
+
+    await asyncio.get_event_loop().run_in_executor(None, _build_zip)
+
+    async def _stream_and_cleanup():
+        try:
+            async with aiofiles.open(tmp_path, "rb") as f:
+                while chunk := await f.read(CHUNK_SIZE):
+                    yield chunk
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
     return StreamingResponse(
-        buf,
+        _stream_and_cleanup(),
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="job-{job_id}.zip"'},
     )
