@@ -1,0 +1,37 @@
+# Minimal TOPAS simulation for API testing.
+# Proton beam hitting a small water phantom.
+# No graphics. Only 100 histories so it finishes in seconds.
+
+s:Ge/World/Material  = "Vacuum"
+d:Ge/World/HLX       = 2.0 m
+d:Ge/World/HLY       = 2.0 m
+d:Ge/World/HLZ       = 2.0 m
+b:Ge/World/Invisible = "True"
+
+s:Ge/Phantom/Type     = "TsBox"
+s:Ge/Phantom/Parent   = "World"
+s:Ge/Phantom/Material = "G4_WATER"
+d:Ge/Phantom/HLX      = 5.0 cm
+d:Ge/Phantom/HLY      = 5.0 cm
+d:Ge/Phantom/HLZ      = 5.0 cm
+d:Ge/Phantom/TransZ   = -10. cm
+
+s:Sc/DoseAtPhantom/Quantity                  = "DoseToMedium"
+s:Sc/DoseAtPhantom/Component                 = "Phantom"
+b:Sc/DoseAtPhantom/OutputToConsole           = "TRUE"
+s:Sc/DoseAtPhantom/IfOutputFileAlreadyExists = "Overwrite"
+
+sv:Ph/Default/Modules = 1 "g4em-standard_opt0"
+
+s:So/TestBeam/Type                     = "Beam"
+s:So/TestBeam/Component                = "BeamPosition"
+s:So/TestBeam/BeamParticle             = "proton"
+d:So/TestBeam/BeamEnergy               = 100.0 MeV
+u:So/TestBeam/BeamEnergySpread         = 0.0
+s:So/TestBeam/BeamPositionDistribution = "None"
+s:So/TestBeam/BeamAngularDistribution  = "None"
+i:So/TestBeam/NumberOfHistoriesInRun   = 100
+
+i:Ts/ShowHistoryCountAtInterval = 10
+i:Ts/NumberOfThreads            = 1
+b:Ts/PauseBeforeQuit            = "False"

@@ -145,6 +145,17 @@ RUN mkdir -p /root/shellScripts \
     && chmod +x /root/shellScripts/topas \
     && echo 'export PATH=/root/shellScripts:$PATH' >> /root/.bashrc
 
-EXPOSE 5900 6080
+# ── topas-api: FastAPI server ─────────────────────────────────────────────────
+RUN pip install --break-system-packages \
+    fastapi \
+    "uvicorn[standard]" \
+    aiofiles \
+    python-multipart \
+    httpx \
+    websockets
+
+COPY topas-api /root/Applications/topas-api
+
+EXPOSE 5900 6080 8000
 
 ENTRYPOINT ["/entrypoint.sh"]
